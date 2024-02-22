@@ -1,0 +1,45 @@
+version: '3.9'
+
+services:
+  app:
+    build: .
+    command: time /src/app/moviedbcsv
+    volumes:
+      - ./movie.csv:/src/app/movie.csv
+    environment:
+      DB_CONN: 'postgresql://root:root@db:5432/movies'
+  db:
+    image: postgres:15.2-alpine3.17
+    environment:
+      POSTGRES_PASSWORD: root
+      POSTGRES_USER: root
+    volumes:
+      - ./resources/seed.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready', '-d', 'movies']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  ui:
+    image: sosedoff/pgweb:0.13.1
+    restart: always
+    ports:
+      - '8079:8081'
+    environment:
+      - PBWEB_DATABASE_URL=postgresql://root:root@db:5432/movies?sslmode=disable
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
+  test:
+    image: golang:1.18.2
+    command: go test -v -race ./...
+    working_dir: /src/app
+    volumes:
+      - .:/src/app
+    environment:
+      DB_CONN: 'postgresql://root:root@db:5432/movies'
+    depends_on:
+      db:
+        condition: service_healthy
